@@ -17,3 +17,10 @@ export function getHeliusRpcUrl(): URL {
   url.searchParams.set("api-key", apiKey);
   return url;
 }
+
+// WebSocket transport uses the same Mainnet host and secret, with the secure wss protocol.
+export function getHeliusWebSocketUrl(): URL {
+  const url = getHeliusRpcUrl();
+  url.protocol = "wss:";
+  return url;
+}

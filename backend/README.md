@@ -68,3 +68,44 @@ npm start
 
 Check Git's protection with `git check-ignore .env`. It should print `.env`.
 Git ignore rules protect untracked files; never force-add `.env`.
+
+## Live transaction listener — beginner notes
+
+From `backend`, run `npm run listen`. Keep the terminal open; press Ctrl+C to stop.
+For compiled JavaScript, run `npm run build` followed by `npm run listen:built`.
+
+- `src/config.ts` loads the same private API key for HTTPS and secure WebSockets.
+- `src/listen.ts` is the command's starting point. It takes the first mint from
+  `src/tracked-tokens.ts` and connects everything together.
+- `src/logs-listener.ts` sends `logsSubscribe` with `mentions: [mint]` at confirmed
+  commitment. The subscription ID tells us the server accepted the request.
+- Each notification prints its signature (the transaction's public identifier).
+  `src/transaction-rpc.ts` then calls `getTransaction` and the terminal prints the
+  returned JSON, including instructions, balances, and execution metadata.
+- Fetching supports transaction versions up to 1. It retries four times when
+  details are not yet available or a request fails, using short increasing delays.
+- A queue fetches one transaction at a time. Pending signatures and the last
+  10,000 completed signatures prevent duplicates during the current process,
+  including across reconnects. Failed fetches are not marked completed.
+- Heartbeat ping/pong checks run every 30 seconds. Failed connections reconnect
+  with increasing delays and resubscribe automatically. Ctrl+C cancels network work.
+
+This is terminal observation only: it does not calculate prices, classify swaps,
+write a database, or send transactions. Failed on-chain transactions are also
+displayed; check `meta.err` in the details before treating anything as successful.
+
+### What this first listener can and cannot capture
+
+`mentions` matches the mint as a transaction account, not every token transfer or
+trade involving it. Some transactions reference token accounts without the mint.
+WebSockets do not replay notifications missed while offline. Deduplication is in
+memory and resets on restart; entries older than the last 10,000 successes can
+be processed again. The queue holds at most 1,000 pending signatures and reports
+overflow. This is a bounded terminal demo, not a complete historical indexer.
+Persistent deduplication and reconnect backfill belong in the later SQLite stage.
+
+### Verification
+
+`npm test` builds TypeScript and uses local HTTP/WebSocket servers to verify
+subscription parameters, RPC retry after a null response, duplicate suppression,
+reconnection, and shutdown. Test fixtures are synthetic and never enter the real feed.
