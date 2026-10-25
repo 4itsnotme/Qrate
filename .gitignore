@@ -1,0 +1,16 @@
+# Private configuration: keep local keys out of every project commit.
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated output can be recreated from the source and lockfile.
+node_modules/
+dist/
+.next/
+
+# Local database files and browser verification artifacts are not source code.
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.chrome*/
+*-check.png

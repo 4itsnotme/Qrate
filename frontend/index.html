@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Qrate.fun — Video</title>
+    <style>
+      /* Shared layout sizes: navigation dimensions stay consistent across the page. */
+      :root {
+        --desktop-nav-width: 88px;
+        --mobile-nav-height: calc(72px + env(safe-area-inset-bottom));
+      }
+
+      /* Layout reset: include borders and padding in every element's size. */
+      * {
+        box-sizing: border-box;
+      }
+
+      /* Page background: the feed owns scrolling instead of the document. */
+      html,
+      body {
+        margin: 0;
+        background: #090909;
+        overflow: hidden;
+      }
+
+      /* Scrollable feed: snap each full-screen stage into place after a swipe or scroll. */
+      .video-feed {
+        width: calc(100% - var(--desktop-nav-width));
+        height: 100vh;
+        height: 100dvh;
+        margin-left: var(--desktop-nav-width);
+        overflow-y: auto;
+        overflow-x: hidden;
+        scroll-snap-type: y mandatory;
+        overscroll-behavior-y: contain;
+        scrollbar-width: none;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Hidden scrollbar: retain scrolling while keeping the Reels-style surface clean. */
+      .video-feed::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* Keyboard focus: make it clear when the feed can receive arrow/Page Down keys. */
+      .video-feed:focus-visible {
+        outline: 2px solid #aaa;
+        outline-offset: -2px;
+      }
+
+      /* Each scroll stop centers one player within a full viewport. */
+      .player-stage {
+        display: grid;
+        place-items: center;
+        width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+        contain: layout paint;
+      }
+
+      /* Player frame: match the reference with 24px of space above and below on desktop. */
+      .video-container {
+        position: relative;
+        display: grid;
+        place-items: center;
+        /* The width follows the height; the width-based bound prevents horizontal overflow. */
+        height: min(calc(100vh - 48px), calc((100vw - var(--desktop-nav-width)) * 16 / 9));
+        height: min(calc(100dvh - 48px), calc((100vw - var(--desktop-nav-width)) * 16 / 9));
+        max-height: 100dvh;
+        aspect-ratio: 9 / 16;
+        overflow: hidden;
+        border-radius: 16px;
+        background: #181818;
+      }
+
+      /* Active state: expose the current item to scripts and future UI controls. */
+      .player-stage[aria-current="true"] .video-container {
+        outline: 1px solid rgb(255 255 255 / 8%);
+      }
+
+      /* Playback surface: always fit the full video width and preserve its source ratio. */
+      .video-container video {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+        object-fit: contain;
+        object-position: center;
+      }
+
+      /* Sound control: overlay a clear mute toggle without changing the video dimensions. */
+      .sound-toggle {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        z-index: 2;
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgb(255 255 255 / 16%);
+        border-radius: 50%;
+        color: #fff;
+        background: rgb(0 0 0 / 55%);
+        backdrop-filter: blur(8px);
+        cursor: pointer;
+      }
+
+      /* Empty slots have no sound control until a real video source is available. */
+      .sound-toggle[hidden] {
+        display: none;
+      }
+
+      /* Sound icons: aria-pressed reflects whether feed audio is enabled. */
+      .sound-toggle svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .sound-toggle[aria-pressed="false"] .sound-on-icon,
+      .sound-toggle[aria-pressed="true"] .sound-off-icon {
+        display: none;
+      }
+
+      .sound-toggle:hover {
+        background: rgb(0 0 0 / 72%);
+      }
+
+      .sound-toggle:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+
+      /* Responsive navigation: use a compact fixed rail beside the desktop feed. */
+      .app-navigation {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 10;
+        display: flex;
+        width: var(--desktop-nav-width);
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 10px;
+        border-right: 1px solid rgb(255 255 255 / 10%);
+        background: #111;
+      }
+
+      /* Add button: give the file-picker action a large, accessible click target. */
+      .add-video-button {
+        display: grid;
+        width: 64px;
+        min-height: 64px;
+        place-items: center;
+        gap: 5px;
+        padding: 8px 4px;
+        border: 0;
+        border-radius: 14px;
+        color: #f5f5f5;
+        background: transparent;
+        font: 600 11px/1.1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+
+      /* Button states: show clear feedback for mouse, keyboard, and touch users. */
+      .add-video-button:hover {
+        background: rgb(255 255 255 / 8%);
+      }
+
+      .add-video-button:active {
+        transform: scale(0.96);
+      }
+
+      .add-video-button:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+
+      .add-video-button svg {
+        width: 26px;
+        height: 26px;
+      }
+
+      /* Screen-reader utility: announce file-picker results without adding visual clutter. */
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* Reduced motion: switch programmatic navigation to immediate jumps. */
+      @media (prefers-reduced-motion: reduce) {
+        .video-feed {
+          scroll-behavior: auto;
+        }
+      }
+
+      /* Mobile: use the available dynamic viewport and remove frame rounding. */
+      @media (max-width: 767px) {
+        /* Mobile feed: stop above the bottom bar and place every video at the top. */
+        .video-feed {
+          width: 100%;
+          height: calc(100vh - var(--mobile-nav-height));
+          height: calc(100dvh - var(--mobile-nav-height));
+          margin-left: 0;
+        }
+
+        .player-stage {
+          min-height: calc(100vh - var(--mobile-nav-height));
+          min-height: calc(100dvh - var(--mobile-nav-height));
+          height: calc(100vh - var(--mobile-nav-height));
+          height: calc(100dvh - var(--mobile-nav-height));
+          place-items: start center;
+        }
+
+        .video-container {
+          height: min(calc(100vh - var(--mobile-nav-height)), calc(100vw * 16 / 9));
+          height: min(calc(100dvh - var(--mobile-nav-height)), calc(100vw * 16 / 9));
+          border-radius: 0;
+        }
+
+        /* Mobile navigation: move the same action into a thumb-friendly bottom bar. */
+        .app-navigation {
+          inset: auto 0 0;
+          width: 100%;
+          height: var(--mobile-nav-height);
+          flex-direction: row;
+          justify-content: center;
+          padding: 6px 16px max(6px, env(safe-area-inset-bottom));
+          border-top: 1px solid rgb(255 255 255 / 10%);
+          border-right: 0;
+        }
+
+        .add-video-button {
+          min-height: 58px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Focusable feed supports native wheel, touch, and keyboard scrolling. -->
+    <main class="video-feed" tabindex="0" aria-label="Qrate.fun video feed">
+      <!-- Video slot 1: selected local videos are previewed here first. -->
+      <section class="player-stage" aria-label="Video slot 1 of 3">
+        <div class="video-container">
+          <video autoplay loop muted playsinline preload="metadata" aria-label="Video playback 1"></video>
+          <button class="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false" hidden>
+            <svg class="sound-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+              <path d="m16 9 5 5m0-5-5 5"></path>
+            </svg>
+            <svg class="sound-on-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+              <path d="M15 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"></path>
+            </svg>
+          </button>
+        </div>
+      </section>
+      <!-- Video slot 2: remains empty until feed data supplies a real video. -->
+      <section class="player-stage" aria-label="Video slot 2 of 3">
+        <div class="video-container">
+          <video autoplay loop muted playsinline preload="metadata" aria-label="Video playback 2"></video>
+          <button class="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false" hidden>
+            <svg class="sound-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+              <path d="m16 9 5 5m0-5-5 5"></path>
+            </svg>
+            <svg class="sound-on-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+              <path d="M15 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"></path>
+            </svg>
+          </button>
+        </div>
+      </section>
+      <!-- Video slot 3: remains empty until feed data supplies a real video. -->
+      <section class="player-stage" aria-label="Video slot 3 of 3">
+        <div class="video-container">
+          <video autoplay loop muted playsinline preload="none" aria-label="Video playback 3"></video>
+          <button class="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false" hidden>
+            <svg class="sound-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+              <path d="m16 9 5 5m0-5-5 5"></path>
+            </svg>
+            <svg class="sound-on-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+              <path d="M15 9a4 4 0 0 1 0 6m3-9a8 8 0 0 1 0 12"></path>
+            </svg>
+          </button>
+        </div>
+      </section>
+    </main>
+    <!-- Responsive navigation: CSS places it on the side or bottom based on screen width. -->
+    <nav class="app-navigation" aria-label="Primary navigation">
+      <!-- Add video action: the hidden input opens the device's native video picker. -->
+      <button class="add-video-button" type="button" aria-controls="video-file-input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="4"></rect>
+          <path d="M12 8v8M8 12h8"></path>
+        </svg>
+        <span>Add video</span>
+      </button>
+      <input id="video-file-input" class="visually-hidden" type="file" accept="video/*" />
+      <span class="visually-hidden video-picker-status" aria-live="polite"></span>
+    </nav>
+    <script>
+      // Feed references: keep DOM lookups in one place and reuse them during scrolling.
+      const feed = document.querySelector('.video-feed');
+      const stages = [...feed.querySelectorAll('.player-stage')];
+      const videos = stages.map((stage) => stage.querySelector('video'));
+      const soundButtons = stages.map((stage) => stage.querySelector('.sound-toggle'));
+      const visibilityByStage = new Map(stages.map((stage) => [stage, 0]));
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const addVideoButton = document.querySelector('.add-video-button');
+      const videoFileInput = document.querySelector('#video-file-input');
+      const videoPickerStatus = document.querySelector('.video-picker-status');
+      let activeIndex = -1;
+      let updateFrame = 0;
+      let localVideoUrl = '';
+      let soundEnabled = false;
+
+      // Source check: empty placeholders stay idle until a real URL or source element exists.
+      function hasSource(video) {
+        return Boolean(video.currentSrc || video.src || video.querySelector('source[src]'));
+      }
+
+      // Playback helper: autoplay the selected video and record a browser policy rejection.
+      async function playVideo(video) {
+        if (!video || document.hidden || !hasSource(video)) return;
+
+        try {
+          await video.play();
+          delete video.dataset.autoplayBlocked;
+        } catch {
+          video.dataset.autoplayBlocked = 'true';
+        }
+      }
+
+      // Loading window: prepare only the active item and its immediate neighbors.
+      function prepareNearbyVideos(index) {
+        videos.forEach((video, videoIndex) => {
+          const isNearby = Math.abs(videoIndex - index) <= 1;
+          video.preload = isNearby ? 'metadata' : 'none';
+
+          // Future API data can use data-src so distant videos do not request media early.
+          if (isNearby && video.dataset.src && !video.getAttribute('src')) {
+            video.src = video.dataset.src;
+            video.load();
+          }
+
+          soundButtons[videoIndex].hidden = !hasSource(video);
+        });
+      }
+
+      // Sound state: update every icon and keep audio limited to the active Reel.
+      function applySoundState() {
+        videos.forEach((video, index) => {
+          const hasActiveSound = soundEnabled && index === activeIndex;
+          video.muted = !hasActiveSound;
+          soundButtons[index].setAttribute('aria-pressed', String(hasActiveSound));
+          soundButtons[index].setAttribute('aria-label', hasActiveSound ? 'Turn sound off' : 'Turn sound on');
+        });
+      }
+
+      // Active item controller: guarantee that no more than one feed video is playing.
+      function setActiveIndex(index) {
+        if (index < 0 || index >= stages.length) return;
+
+        activeIndex = index;
+
+        stages.forEach((stage, stageIndex) => {
+          if (stageIndex === activeIndex) stage.setAttribute('aria-current', 'true');
+          else stage.removeAttribute('aria-current');
+        });
+
+        // Pause every non-active item, including videos the browser tried to autoplay on load.
+        videos.forEach((video, videoIndex) => {
+          if (videoIndex !== activeIndex) video.pause();
+        });
+
+        prepareNearbyVideos(activeIndex);
+        applySoundState();
+        playVideo(videos[activeIndex]);
+      }
+
+      // Visibility resolver: choose the single stage occupying most of the feed viewport.
+      function updateActiveStage() {
+        updateFrame = 0;
+        let bestIndex = activeIndex;
+        let bestRatio = 0;
+
+        stages.forEach((stage, index) => {
+          const ratio = visibilityByStage.get(stage) ?? 0;
+          if (ratio > bestRatio) {
+            bestIndex = index;
+            bestRatio = ratio;
+          }
+        });
+
+        // Waiting until a majority is visible prevents playback switching mid-swipe.
+        if (bestRatio >= 0.6) setActiveIndex(bestIndex);
+      }
+
+      // Intersection observer: collect visibility changes, then resolve once per paint frame.
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => visibilityByStage.set(entry.target, entry.intersectionRatio));
+
+        if (!updateFrame) {
+          updateFrame = requestAnimationFrame(updateActiveStage);
+        }
+      }, {
+        root: feed,
+        threshold: [0, 0.25, 0.5, 0.6, 0.75, 1],
+      });
+
+      stages.forEach((stage) => observer.observe(stage));
+
+      // Keyboard paging: move exactly one Reel at a time for predictable navigation.
+      feed.addEventListener('keydown', (event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+        const destinations = {
+          ArrowDown: Math.min(activeIndex + 1, stages.length - 1),
+          PageDown: Math.min(activeIndex + 1, stages.length - 1),
+          ArrowUp: Math.max(activeIndex - 1, 0),
+          PageUp: Math.max(activeIndex - 1, 0),
+          Home: 0,
+          End: stages.length - 1,
+        };
+
+        if (!(event.key in destinations)) return;
+        event.preventDefault();
+        stages[destinations[event.key]].scrollIntoView({
+          behavior: reduceMotion.matches ? 'auto' : 'smooth',
+          block: 'start',
+        });
+      });
+
+      // Tap playback: clicking the active video toggles pause and resume like a Reel.
+      videos.forEach((video, index) => {
+        video.addEventListener('click', () => {
+          if (index !== activeIndex || !hasSource(video)) return;
+          if (video.paused) playVideo(video);
+          else video.pause();
+        });
+      });
+
+      // Sound buttons: remember the user's audio choice as they move through the feed.
+      soundButtons.forEach((button, index) => {
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          if (index !== activeIndex || !hasSource(videos[index])) return;
+
+          soundEnabled = !soundEnabled;
+          applySoundState();
+          playVideo(videos[activeIndex]);
+        });
+      });
+
+      // Add video button: open the native file picker from an explicit user action.
+      addVideoButton.addEventListener('click', () => {
+        videoFileInput.click();
+      });
+
+      // Local preview: show the selected video in the first Reel without uploading it yet.
+      videoFileInput.addEventListener('change', () => {
+        const [file] = videoFileInput.files;
+        if (!file) return;
+
+        if (!file.type.startsWith('video/')) {
+          videoPickerStatus.textContent = 'Please choose a video file.';
+          return;
+        }
+
+        if (localVideoUrl) URL.revokeObjectURL(localVideoUrl);
+        localVideoUrl = URL.createObjectURL(file);
+
+        const firstVideo = videos[0];
+        firstVideo.src = localVideoUrl;
+        firstVideo.load();
+        soundButtons[0].hidden = false;
+        videoPickerStatus.textContent = `${file.name} is ready to preview.`;
+
+        feed.scrollTo({ top: 0, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+        setActiveIndex(0);
+      });
+
+      // Page lifecycle: stop decoding in the background and resume the selected item on return.
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) videos.forEach((video) => video.pause());
+        else playVideo(videos[activeIndex]);
+      });
+
+      window.addEventListener('pagehide', () => {
+        videos.forEach((video) => video.pause());
+        if (localVideoUrl) URL.revokeObjectURL(localVideoUrl);
+      });
+
+      // Initial state: select the first Reel before the observer reports its first measurement.
+      setActiveIndex(0);
+    </script>
+  </body>
+</html>

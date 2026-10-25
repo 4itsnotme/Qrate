@@ -1,0 +1,29 @@
+{
+  "name": "@qrate/analytics-backend",
+  "version": "1.0.0",
+  "description": "This folder will contain Qrate's reusable Node.js and TypeScript analytics backend.",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "rpc:test": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "dotenv": "18.0.9"
+  }
+}
