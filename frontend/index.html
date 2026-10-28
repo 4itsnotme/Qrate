@@ -88,12 +88,88 @@
 
       /* Playback surface: always fit the full video width and preserve its source ratio. */
       .video-container video {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
         max-width: 100%;
         object-fit: contain;
         object-position: center;
+      }
+
+      .video-poster {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .media-feedback {
+        position: absolute;
+        z-index: 3;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        padding: 24px;
+        color: #fff;
+        text-align: center;
+        font: 14px/1.5 system-ui, sans-serif;
+        pointer-events: none;
+      }
+
+      .media-feedback p {
+        margin: 0;
+        padding: 6px 12px;
+        border-radius: 8px;
+        background: rgb(0 0 0 / 65%);
+      }
+
+      .playback-action,
+      .feed-load-status button {
+        min-height: 44px;
+        padding: 10px 20px;
+        border: 1px solid rgb(255 255 255 / 30%);
+        border-radius: 999px;
+        color: #fff;
+        background: #252525;
+        font: 600 14px/1.2 system-ui, sans-serif;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+
+      .playback-action:focus-visible,
+      .feed-load-status button:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 3px;
+      }
+
+      .feed-load-status {
+        position: fixed;
+        z-index: 12;
+        right: 20px;
+        bottom: calc(var(--mobile-nav-height) + 12px);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: calc(100vw - 40px);
+        padding: 10px 14px;
+        border-radius: 12px;
+        color: #fff;
+        background: #202020;
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+
+      .video-poster[hidden],
+      .media-feedback[hidden],
+      .playback-action[hidden],
+      .feed-load-status[hidden] {
+        display: none;
       }
 
       /* Sound control: overlay a clear mute toggle without changing the video dimensions. */
@@ -177,7 +253,8 @@
 
       /* Keep the feed mounted, so opening a trading tab cannot reset its videos or scroll. */
       body.trading-open .video-feed,
-      body.trading-open .app-navigation {
+      body.trading-open .app-navigation,
+      body.trading-open .feed-load-status {
         visibility: hidden;
       }
 
@@ -278,7 +355,7 @@
           min-height: calc(100dvh - var(--mobile-nav-height));
           height: calc(100vh - var(--mobile-nav-height));
           height: calc(100dvh - var(--mobile-nav-height));
-          place-items: start center;
+          place-items: center;
         }
 
         .video-container {
@@ -311,7 +388,6 @@
       <!-- Video slot 1: selected local videos are previewed here first. -->
       <section class="player-stage" data-video-id="video-1" aria-label="Video slot 1 of 3">
         <div class="video-container">
-          <video autoplay loop muted playsinline preload="metadata" aria-label="Video playback 1"></video>
           <button class="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false" hidden>
             <svg class="sound-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
@@ -328,7 +404,6 @@
       <!-- Video slot 2: remains empty until feed data supplies a real video. -->
       <section class="player-stage" data-video-id="video-2" aria-label="Video slot 2 of 3">
         <div class="video-container">
-          <video autoplay loop muted playsinline preload="metadata" aria-label="Video playback 2"></video>
           <button class="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false" hidden>
             <svg class="sound-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
@@ -345,7 +420,6 @@
       <!-- Video slot 3: remains empty until feed data supplies a real video. -->
       <section class="player-stage" data-video-id="video-3" aria-label="Video slot 3 of 3">
         <div class="video-container">
-          <video autoplay loop muted playsinline preload="none" aria-label="Video playback 3"></video>
           <button class="sound-toggle" type="button" aria-label="Turn sound on" aria-pressed="false" hidden>
             <svg class="sound-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
@@ -370,344 +444,19 @@
         </svg>
         <span>Add video</span>
       </button>
-      <input id="video-file-input" class="visually-hidden" type="file" accept="video/*" />
+      <input id="video-file-input" class="visually-hidden" type="file" accept="video/*" multiple />
       <span class="visually-hidden video-picker-status" aria-live="polite"></span>
     </nav>
+    <div class="feed-load-status" role="status" aria-live="polite" hidden>
+      <span></span>
+      <button type="button" hidden>Retry</button>
+    </div>
     <!-- Each video has its own route; chart and trading content will be added later. -->
     <section id="trading-tab" class="trading-tab" aria-labelledby="trading-title" hidden>
       <h1 id="trading-title" class="visually-hidden">Trade</h1>
       <button class="back-to-feed" type="button" aria-label="Back to video feed">&larr; Back</button>
     </section>
-    <script>
-      // Feed references: keep DOM lookups in one place and reuse them during scrolling.
-      const feed = document.querySelector('.video-feed');
-      const stages = [...feed.querySelectorAll('.player-stage')];
-      const videos = stages.map((stage) => stage.querySelector('video'));
-      const soundButtons = stages.map((stage) => stage.querySelector('.sound-toggle'));
-      const visibilityByStage = new Map(stages.map((stage) => [stage, 0]));
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-      const addVideoButton = document.querySelector('.add-video-button');
-      const videoFileInput = document.querySelector('#video-file-input');
-      const videoPickerStatus = document.querySelector('.video-picker-status');
-      const navigation = document.querySelector('.app-navigation');
-      const tradingTab = document.querySelector('#trading-tab');
-      const tradingTitle = document.querySelector('#trading-title');
-      const backToFeed = document.querySelector('.back-to-feed');
-      const phoneLayout = window.matchMedia('(max-width: 767px)');
-      let activeIndex = -1;
-      let updateFrame = 0;
-      let localVideoUrl = '';
-      let soundEnabled = false;
-      let tradingOpen = false;
-      let feedSnapshot = null;
-      let suppressClickUntil = 0;
-
-      // Source check: empty placeholders stay idle until a real URL or source element exists.
-      function hasSource(video) {
-        return Boolean(video.currentSrc || video.src || video.querySelector('source[src]'));
-      }
-
-      // Playback helper: autoplay the selected video and record a browser policy rejection.
-      async function playVideo(video) {
-        if (!video || document.hidden || tradingOpen || !hasSource(video)) return;
-
-        try {
-          await video.play();
-          // A pending play promise may resolve after navigation has already paused the feed.
-          if (tradingOpen || document.hidden || video !== videos[activeIndex]) video.pause();
-          delete video.dataset.autoplayBlocked;
-        } catch {
-          video.dataset.autoplayBlocked = 'true';
-        }
-      }
-
-      // Loading window: prepare only the active item and its immediate neighbors.
-      function prepareNearbyVideos(index) {
-        videos.forEach((video, videoIndex) => {
-          const isNearby = Math.abs(videoIndex - index) <= 1;
-          video.preload = isNearby ? 'metadata' : 'none';
-
-          // Future API data can use data-src so distant videos do not request media early.
-          if (isNearby && video.dataset.src && !video.getAttribute('src')) {
-            video.src = video.dataset.src;
-            video.load();
-          }
-
-          soundButtons[videoIndex].hidden = !hasSource(video);
-        });
-      }
-
-      // Sound state: update every icon and keep audio limited to the active Reel.
-      function applySoundState() {
-        videos.forEach((video, index) => {
-          const hasActiveSound = soundEnabled && index === activeIndex;
-          video.muted = !hasActiveSound;
-          soundButtons[index].setAttribute('aria-pressed', String(hasActiveSound));
-          soundButtons[index].setAttribute('aria-label', hasActiveSound ? 'Turn sound off' : 'Turn sound on');
-        });
-      }
-
-      // Active item controller: guarantee that no more than one feed video is playing.
-      function setActiveIndex(index, { autoplay = true } = {}) {
-        if (index < 0 || index >= stages.length) return;
-
-        activeIndex = index;
-
-        stages.forEach((stage, stageIndex) => {
-          if (stageIndex === activeIndex) stage.setAttribute('aria-current', 'true');
-          else stage.removeAttribute('aria-current');
-        });
-
-        // Pause every non-active item, including videos the browser tried to autoplay on load.
-        videos.forEach((video, videoIndex) => {
-          if (videoIndex !== activeIndex) video.pause();
-        });
-
-        prepareNearbyVideos(activeIndex);
-        applySoundState();
-        if (autoplay) playVideo(videos[activeIndex]);
-      }
-
-      // Route identity is per video slot for now; real catalog IDs will replace these prototype IDs.
-      function openTrading(index) {
-        if (tradingOpen || !stages[index]) return;
-        history.pushState({ qrateTrade: true }, '', `#trade/${stages[index].dataset.videoId}`);
-        renderRoute();
-      }
-
-      function renderRoute() {
-        const index = stages.findIndex((stage) => location.hash === `#trade/${stage.dataset.videoId}`);
-        if (index >= 0) {
-          if (!tradingOpen) {
-            feedSnapshot = {
-              index,
-              scrollTop: index === activeIndex ? feed.scrollTop : stages[index].offsetTop,
-              height: feed.clientHeight,
-              playing: index === activeIndex && !videos[index].paused,
-              focus: document.activeElement,
-            };
-          }
-          tradingOpen = true;
-          videos.forEach((video) => video.pause());
-          tradingTab.dataset.videoId = stages[index].dataset.videoId;
-          tradingTitle.textContent = `Trade — Video ${index + 1}`;
-          tradingTab.hidden = false;
-          document.body.classList.add('trading-open');
-          backToFeed.disabled = false;
-          backToFeed.focus({ preventScroll: true });
-          feed.inert = true;
-          navigation.inert = true;
-          document.title = `Qrate.fun — Trade video ${index + 1}`;
-          return;
-        }
-
-        if (!tradingOpen) return;
-        tradingOpen = false;
-        tradingTab.hidden = true;
-        delete tradingTab.dataset.videoId;
-        document.body.classList.remove('trading-open');
-        feed.inert = false;
-        navigation.inert = false;
-        document.title = 'Qrate.fun — Video';
-        const snapshot = feedSnapshot;
-        feedSnapshot = null;
-        if (snapshot) {
-          feed.scrollTop = snapshot.height === feed.clientHeight ? snapshot.scrollTop : snapshot.index * feed.clientHeight;
-          setActiveIndex(snapshot.index, { autoplay: snapshot.playing });
-          const focusTarget = snapshot.focus instanceof HTMLElement && snapshot.focus !== document.body ? snapshot.focus : feed;
-          focusTarget.focus({ preventScroll: true });
-        }
-      }
-
-      function returnToFeed() {
-        if (!tradingOpen || backToFeed.disabled) return;
-        if (history.state?.qrateTrade) {
-          backToFeed.disabled = true;
-          history.back();
-        } else {
-          // A direct link/reload must also have a safe return path without leaving Qrate.
-          const feedUrl = new URL(location.href);
-          feedUrl.hash = '';
-          history.replaceState(null, '', feedUrl);
-          renderRoute();
-        }
-      }
-
-      stages.forEach((stage, index) => {
-        stage.querySelector('.trade-button').addEventListener('click', () => openTrading(index));
-      });
-      backToFeed.addEventListener('click', returnToFeed);
-      window.addEventListener('popstate', renderRoute);
-      window.addEventListener('hashchange', renderRoute);
-      document.addEventListener('keydown', (event) => {
-        if (tradingOpen && event.key === 'Escape') {
-          event.preventDefault();
-          returnToFeed();
-        }
-      });
-
-      // One-finger horizontal gestures leave vertical scroll and pinch zoom to the browser.
-      function addPhoneSwipe(surface, direction, onSwipe) {
-        let gesture = null;
-        surface.addEventListener('touchstart', (event) => {
-          gesture = null;
-          if (!phoneLayout.matches || event.touches.length !== 1 || event.target.closest('button, input, a')) return;
-          const touch = event.touches[0];
-          // Edge gestures belong to the phone/browser's own back and forward navigation.
-          if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
-          gesture = { id: touch.identifier, x: touch.clientX, y: touch.clientY, started: performance.now(), index: activeIndex, vertical: false };
-        }, { passive: true });
-        surface.addEventListener('touchmove', (event) => {
-          if (!gesture) return;
-          if (event.touches.length !== 1) { gesture = null; return; }
-          const touch = event.touches[0];
-          const dx = Math.abs(touch.clientX - gesture.x);
-          const dy = Math.abs(touch.clientY - gesture.y);
-          if (dy > 12 && dy >= dx) gesture.vertical = true;
-        }, { passive: true });
-        surface.addEventListener('touchend', (event) => {
-          const start = gesture;
-          gesture = null;
-          if (!start || start.vertical || event.touches.length || start.index !== activeIndex || performance.now() - start.started > 1000) return;
-          const touch = [...event.changedTouches].find((item) => item.identifier === start.id);
-          if (!touch) return;
-          const dx = (touch.clientX - start.x) * direction;
-          const dy = Math.abs(touch.clientY - start.y);
-          if (dx < 64 || dx < dy * 1.5) return;
-          suppressClickUntil = performance.now() + 500;
-          onSwipe();
-        }, { passive: true });
-        surface.addEventListener('touchcancel', () => { gesture = null; }, { passive: true });
-      }
-
-      addPhoneSwipe(feed, 1, () => openTrading(activeIndex));
-      addPhoneSwipe(tradingTab, -1, returnToFeed);
-      // Do not let a swipe's compatibility click pause a video or click the newly opened Back button.
-      document.addEventListener('click', (event) => {
-        if (performance.now() < suppressClickUntil && event.detail !== 0) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }
-      }, true);
-
-      // Visibility resolver: choose the single stage occupying most of the feed viewport.
-      function updateActiveStage() {
-        updateFrame = 0;
-        if (tradingOpen) return;
-        let bestIndex = activeIndex;
-        let bestRatio = 0;
-
-        stages.forEach((stage, index) => {
-          const ratio = visibilityByStage.get(stage) ?? 0;
-          if (ratio > bestRatio) {
-            bestIndex = index;
-            bestRatio = ratio;
-          }
-        });
-
-        // Waiting until a majority is visible prevents playback switching mid-swipe.
-        if (bestRatio >= 0.6 && bestIndex !== activeIndex) setActiveIndex(bestIndex);
-      }
-
-      // Intersection observer: collect visibility changes, then resolve once per paint frame.
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => visibilityByStage.set(entry.target, entry.intersectionRatio));
-
-        if (!updateFrame) {
-          updateFrame = requestAnimationFrame(updateActiveStage);
-        }
-      }, {
-        root: feed,
-        threshold: [0, 0.25, 0.5, 0.6, 0.75, 1],
-      });
-
-      stages.forEach((stage) => observer.observe(stage));
-
-      // Keyboard paging: move exactly one Reel at a time for predictable navigation.
-      feed.addEventListener('keydown', (event) => {
-        if (tradingOpen) return;
-        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-
-        const destinations = {
-          ArrowDown: Math.min(activeIndex + 1, stages.length - 1),
-          PageDown: Math.min(activeIndex + 1, stages.length - 1),
-          ArrowUp: Math.max(activeIndex - 1, 0),
-          PageUp: Math.max(activeIndex - 1, 0),
-          Home: 0,
-          End: stages.length - 1,
-        };
-
-        if (!(event.key in destinations)) return;
-        event.preventDefault();
-        stages[destinations[event.key]].scrollIntoView({
-          behavior: reduceMotion.matches ? 'auto' : 'smooth',
-          block: 'start',
-        });
-      });
-
-      // Tap playback: clicking the active video toggles pause and resume like a Reel.
-      videos.forEach((video, index) => {
-        video.addEventListener('click', () => {
-          if (index !== activeIndex || !hasSource(video)) return;
-          if (video.paused) playVideo(video);
-          else video.pause();
-        });
-      });
-
-      // Sound buttons: remember the user's audio choice as they move through the feed.
-      soundButtons.forEach((button, index) => {
-        button.addEventListener('click', (event) => {
-          event.stopPropagation();
-          if (index !== activeIndex || !hasSource(videos[index])) return;
-
-          soundEnabled = !soundEnabled;
-          applySoundState();
-          playVideo(videos[activeIndex]);
-        });
-      });
-
-      // Add video button: open the native file picker from an explicit user action.
-      addVideoButton.addEventListener('click', () => {
-        videoFileInput.click();
-      });
-
-      // Local preview: show the selected video in the first Reel without uploading it yet.
-      videoFileInput.addEventListener('change', () => {
-        const [file] = videoFileInput.files;
-        if (!file) return;
-
-        if (!file.type.startsWith('video/')) {
-          videoPickerStatus.textContent = 'Please choose a video file.';
-          return;
-        }
-
-        if (localVideoUrl) URL.revokeObjectURL(localVideoUrl);
-        localVideoUrl = URL.createObjectURL(file);
-
-        const firstVideo = videos[0];
-        firstVideo.src = localVideoUrl;
-        firstVideo.load();
-        soundButtons[0].hidden = false;
-        videoPickerStatus.textContent = `${file.name} is ready to preview.`;
-
-        feed.scrollTo({ top: 0, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
-        setActiveIndex(0);
-      });
-
-      // Page lifecycle: stop decoding in the background and resume the selected item on return.
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) videos.forEach((video) => video.pause());
-        else playVideo(videos[activeIndex]);
-      });
-
-      window.addEventListener('pagehide', () => {
-        videos.forEach((video) => video.pause());
-        if (localVideoUrl) URL.revokeObjectURL(localVideoUrl);
-      });
-
-      // Initial state: select the first Reel before the observer reports its first measurement.
-      setActiveIndex(0);
-      renderRoute();
-    </script>
+    <script src="feed-data.js" defer></script>
+    <script src="feed.js" defer></script>
   </body>
 </html>
