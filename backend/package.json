@@ -6,6 +6,10 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "market:inspect": "tsx src/market.ts inspect",
+    "market:listen": "tsx src/market.ts listen",
+    "market:recover": "tsx src/market.ts recover",
+    "market:status": "tsx src/market.ts status",
     "listen": "tsx src/listen.ts",
     "listen:built": "node dist/listen.js",
     "test": "npm run build && node --test test/*.test.mjs",
@@ -19,7 +23,7 @@
   "author": "",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13.0"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

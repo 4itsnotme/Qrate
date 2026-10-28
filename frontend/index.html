@@ -265,10 +265,95 @@
         padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 20px max(20px, env(safe-area-inset-left));
         background: #090909;
         touch-action: pan-y pinch-zoom;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        color: #eee;
+        font-family: system-ui, sans-serif;
       }
 
       .trading-tab[hidden] {
         display: none;
+      }
+
+      .trading-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        min-width: 0;
+      }
+
+      .trading-header h1 {
+        margin: 0;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .trading-header .back-to-feed {
+        flex-shrink: 0;
+      }
+
+      .trading-chart-panel {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+        border: 1px solid #272727;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #111;
+      }
+
+      .trading-chart-label {
+        margin: 0;
+        padding: 16px 20px;
+        border-bottom: 1px solid #242424;
+        font-size: 13px;
+        font-weight: 500;
+        color: #aaa;
+      }
+
+      .trading-chart-surface {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .trading-chart-canvas {
+        position: absolute;
+        inset: 0;
+      }
+
+      .trading-chart-message {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: grid;
+        place-content: center;
+        margin: 0;
+        padding: 24px;
+        color: #aaa;
+        font-size: 14px;
+        text-align: center;
+        pointer-events: none;
+      }
+
+      .chart-attribution {
+        margin: 0;
+        padding: 12px 16px;
+        border-top: 1px solid #242424;
+        color: #818181;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .chart-attribution a {
+        color: #aaa;
+        text-underline-offset: 3px;
       }
 
       /* Responsive navigation: use a compact fixed rail beside the desktop feed. */
@@ -451,11 +536,23 @@
       <span></span>
       <button type="button" hidden>Retry</button>
     </div>
-    <!-- Each video has its own route; chart and trading content will be added later. -->
+    <!-- Each route owns a clean chart; price data will come from the future candle API. -->
     <section id="trading-tab" class="trading-tab" aria-labelledby="trading-title" hidden>
-      <h1 id="trading-title" class="visually-hidden">Trade</h1>
-      <button class="back-to-feed" type="button" aria-label="Back to video feed">&larr; Back</button>
+      <header class="trading-header">
+        <button class="back-to-feed" type="button" aria-label="Back to video feed">&larr; Back</button>
+        <h1 id="trading-title">Trade</h1>
+      </header>
+      <section class="trading-chart-panel" aria-labelledby="trading-chart-label">
+        <h2 id="trading-chart-label" class="trading-chart-label">Price chart</h2>
+        <div class="trading-chart-surface">
+          <div id="trading-chart" class="trading-chart-canvas" role="img" aria-label="Price chart — no candle data available"></div>
+          <p class="trading-chart-message" role="status">No price data yet.</p>
+        </div>
+        <p class="chart-attribution">TradingView Lightweight Charts™ · Copyright © 2025 <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView, Inc.</a></p>
+      </section>
     </section>
+    <script src="vendor/lightweight-charts/lightweight-charts.standalone.production.js" defer></script>
+    <script src="trading-chart.js" defer></script>
     <script src="feed-data.js" defer></script>
     <script src="feed.js" defer></script>
   </body>

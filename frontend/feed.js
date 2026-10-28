@@ -393,6 +393,7 @@
       tradingTab.dataset.videoId = record.entry.id;
       tradingTitle.textContent = `Trade — ${record.entry.title}`;
       tradingTab.hidden = false;
+      window.qrateTradingChart.open(record.entry.id, record.entry.title);
       document.body.classList.add('trading-open');
       backButton.disabled = false;
       backButton.focus({ preventScroll: true });
@@ -403,6 +404,7 @@
     if (!tradingOpen) return;
     tradingOpen = false;
     tradingTab.hidden = true;
+    window.qrateTradingChart.close();
     delete tradingTab.dataset.videoId;
     document.body.classList.remove('trading-open');
     feed.inert = navigation.inert = pageStatus.inert = false;
@@ -528,6 +530,7 @@
     destroyed = true;
     lifetime.abort();
     source.destroy();
+    window.qrateTradingChart.destroy();
     observer.disconnect();
     resizeObserver.disconnect();
     cancelAnimationFrame(updateFrame);

@@ -2,7 +2,13 @@
 
 Open `index.html` in a browser and use **Add video**. You can select multiple local videos. The first replaces the first preview; additional files fill empty slots and then append new entries. Nothing is uploaded or persisted. Plain deferred scripts work through `file://` as well as a static HTTP server.
 
-`index.html` owns markup/styles, `feed.js` owns playback/navigation, and `feed-data.js` owns feed entries and optional pagination. No frontend installation or build is required. The empty trading tabs and glass Trade buttons remain available.
+`index.html` owns markup/styles, `feed.js` owns playback/navigation, and `feed-data.js` owns feed entries and optional pagination. No frontend installation or build is required. Glass Trade buttons and phone swipes open a per-video trading tab containing an empty Lightweight Charts canvas.
+
+## Trading chart
+
+`trading-chart.js` lazily creates a real TradingView Lightweight Charts **5.2.1** candlestick chart when a video trading route opens. It auto-resizes and removes its canvas/listeners on close; changing videos creates a clean chart with the selected video's identity. The chart deliberately receives an empty data array and shows **No price data yet.** There is no candle API, token association or fabricated sample market data.
+
+The unmodified standalone bundle is tracked under `vendor/lightweight-charts/`, with its release hash, Apache/MIT notices and source provenance. It works through HTTP or file:// without a runtime CDN or npm installation. Required attribution/link and the built-in TradingView logo remain visible. If the library is unavailable, the tab reports an error and Back still works.
 
 ## Loading behavior
 
@@ -11,7 +17,7 @@ Open `index.html` in a browser and use **Add video**. You can select multiple lo
 - Save-Data / 2G disables speculative next-media loading; 3G requests metadata only. Without Network Information API support, normal browser-managed preloading is used.
 - Distant media is paused, its source removed, `load()` called to cancel work, and its element removed. Returning recreates it and restores its saved position. Adjacent sources are not reset just because feed data is appended.
 - `data-media-state` reports `unloaded`, `poster`, `preloading`, `ready`, `active`, `inactive` or `released`; separate `data-playback-state` reports loading, playing, paused, blocked or error conditions. Play/Retry controls recover blocked autoplay or media errors.
-- Wheel/trackpad bursts advance one item; vertical touch scrolling uses CSS Scroll Snap. Keyboard arrows/Page Up/Page Down/Home/End navigate. Right swipe / Trade opens the selected video's empty tab.
+- Wheel/trackpad bursts advance one item; vertical touch scrolling uses CSS Scroll Snap. Keyboard arrows/Page Up/Page Down/Home/End navigate. Right swipe / Trade opens the selected video's chart tab.
 
 `preload` is a browser hint, not a byte budget or buffering guarantee. Browsers may download a whole small file. Adaptive streaming/segment budgets require the later media-provider work. Light stage/poster shells remain in the DOM as entries append; heavy media elements are bounded, not total DOM size. Physical device memory, Safari and real trackpad hardware still need verification.
 

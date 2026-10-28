@@ -7,6 +7,12 @@ export interface ListenerOptions {
   rpcUrl: URL;
   webSocketUrl: URL;
   mint: string;
+  mentionsAddress?: string;
+  skipFailedTransactions?: boolean;
+  commitment?: 'confirmed' | 'finalized';
+  onSignature?: (notice: { signature: string; slot: number; err: unknown }) => void;
+  onSubscribed?: () => void;
+  onFatalError?: () => void;
   log?: (message: string) => void;
   onTransaction?: (signature: string, details: Record<string, unknown>) => void;
 }
@@ -80,7 +86,7 @@ export function startLogsListener(options: ListenerOptions): { stop: () => void 
     current.on("open", () => {
       current.send(JSON.stringify({
         jsonrpc: "2.0", id: 1, method: "logsSubscribe",
-        params: [{ mentions: [options.mint] }, { commitment: "confirmed" }],
+        params: [{ mentions: [options.mentionsAddress ?? options.mint] }, { commitment: options.commitment ?? "confirmed" }],
       }));
       acknowledgementTimer = setTimeout(() => current.terminate(), 15_000);
       heartbeat = setInterval(() => {
@@ -107,14 +113,24 @@ export function startLogsListener(options: ListenerOptions): { stop: () => void 
         clearTimeout(acknowledgementTimer);
         // Reset backoff only after a stable minute, avoiding a rapid connect/drop loop.
         stableTimer = setTimeout(() => { connectionAttempts = 0; }, 60_000);
-        log(`Subscribed to mint ${options.mint} (subscription ${subscriptionId}).`);
+        log(`Subscribed to address ${options.mentionsAddress ?? options.mint} (subscription ${subscriptionId}).`);
+        try { options.onSubscribed?.(); }
+        catch { stop(); options.onFatalError?.(); }
         return;
       }
       if (message.method !== "logsNotification" || !isRecord(message.params) ||
           subscriptionId === undefined || message.params.subscription !== subscriptionId ||
           !isRecord(message.params.result) || !isRecord(message.params.result.value)) return;
       const signature = message.params.result.value.signature;
+      if (options.skipFailedTransactions && message.params.result.value.err !== null) return;
       if (typeof signature !== "string" || !/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) return;
+      if (options.onSignature) {
+        const context = message.params.result.context;
+        if (!isRecord(context) || !Number.isSafeInteger(context.slot) || Number(context.slot) < 0) return;
+        try { options.onSignature({ signature, slot: Number(context.slot), err: message.params.result.value.err }); }
+        catch { log('Durable signature handoff failed; stopping listener.'); stop(); options.onFatalError?.(); }
+        return;
+      }
       if (completed.has(signature) || pending.has(signature)) return;
       // Bound queue growth explicitly; report overflow instead of consuming unlimited memory.
       if (pending.size >= 1000) {

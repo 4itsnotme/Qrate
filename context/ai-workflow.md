@@ -29,7 +29,7 @@
 
 ## Step 5 — Permanent project context
 
-- The eight `/context` files are the shared source of architectural knowledge, **not** long chat history.
+- The `/context` Markdown files are the shared source of architectural knowledge, **not** long chat history. `code-overview.md` is the short entry point; `codebase-map.md` holds details.
 - Update files after decisions, successful features, architecture changes and discovered limitations.
 
 ## Step 6 — Small development tasks

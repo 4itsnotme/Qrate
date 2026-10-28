@@ -17,12 +17,26 @@
 - **Back/swipe back:** Return to video feed where the user left off.
 - Dedicated trading page layout (video preview vs chart size, etc.) is **TBD**.
 
+### Current navigation prototype — 2026-10-28
+
+- Each video has a separate trading route and will use its own associated token's chart when market data is implemented. Current routes use local slot IDs, not real token associations.
+- Phones: swipe right on the current video to open its trading tab. Desktop: use the glossy transparent **Trade** button over the video. The button also remains available on phones as a non-gesture alternative.
+- The trading tab now contains a real **TradingView Lightweight Charts 5.2.1** chart with **No price data yet.** Its candle series is empty; no sample prices or backend candle connection exist. Return using Back, Escape, browser Back or a left swipe on phones; feed position and prior playback state are retained.
+- Trading markup is in `frontend/index.html`; navigation/playback is in `frontend/feed.js` and chart lifecycle is in `frontend/trading-chart.js`, tested in desktop/mobile-emulated Chrome. Trading controls remain unimplemented; creator-profile navigation remains deferred.
+
 ## Feed and media
 
 - MVP tabs: **For You, Trending, Following**. Simple ranking initially; more advanced ranking later.
 - Consistent **9:16 video container**, accepting multiple uploaded ratios without distortion.
 - Automatic quality selection and smart preloading. Playback UX must prioritize quick startup and smooth scrolling.
 - Show likes, comments, shares, bookmarks and follows; detailed placement TBD.
+
+### Current scrolling/loading prototype — 2026-10-28
+
+- Wheel/trackpad bursts move one item; touch uses native vertical snap; keyboard navigation is supported. Mobile video frames are centered in the area above navigation. The desktop 9:16 frame/rounding, preserved source ratio and glass Trade control remain.
+- Only the active video plays. Next media warms after current media has data; the previously watched neighbor remains available; two-ahead can show a supplied poster without loading its media. Distant media releases resources, with at most three video elements attached.
+- Play/Retry handles blocked autoplay or failed media. User pause/sound choice and returning from trading/background are preserved. Data-loading status is separate from media playback status.
+- Add video accepts multiple local files; this is preview only. Appended entries and optional cursor pagination are supported, but no backend feed is connected. Adaptive streaming/provider uploads and generated thumbnails remain unimplemented.
 
 ## Trading UI
 

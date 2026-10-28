@@ -20,10 +20,10 @@
 | Authentication | Supabase Auth | Likely, final model TBD |
 | Wallet connection | Phantom, Solflare, other compatible wallets | Intended |
 | Embedded wallet provider | Privy or alternative | **TBD** |
-| Token creation, swapping, liquidity | Meteora DBC → configured Meteora migration pool (DAMM v2 intended) | Intended |
-| RPC, WebSockets and recovery queries | Helius | Likely, verify actual code/quotas |
+| Token creation, swapping, liquidity | Meteora DBC → configured Meteora migration pool (DAMM v2 intended) | Restricted read-only DBC/DAMM decoding and verified migration following exist; launching/swapping remain intended |
+| RPC, WebSockets and recovery queries | Helius | Finalized durable collection/recovery locally tested; live throughput/quotas not verified |
 | Application API and event workers | Railway | Likely, verify actual code |
-| Price chart UI | TradingView Lightweight Charts | Likely |
+| Price chart UI | TradingView Lightweight Charts 5.2.1 | Empty responsive canvas integrated; candle data/API pending |
 | Moderation | Hybrid automated checks + human review | Conceptual, **TBD** |
 | Fiat on-ramp/card payments | Regulated integration if appropriate | **TBD** |
 
@@ -73,6 +73,16 @@
 - Keep drafts private and avoid exposing unreviewed content. Moderation/publishing workflow **TBD**.
 
 ## Market data reliability
+
+### Verified boundary — 2026-10-28
+
+`backend/src/market.ts` verifies an explicitly selected standard DBC pool and reads/decodes receipts through `src/meteora/`. Supported exact-input WSOL swaps are normalized from authenticated frame-local events plus token-transfer evidence; amounts and price ratios remain exact. SDK IDL data is pinned with an MIT notice; no Meteora SDK package was installed. The old PumpSwap default is removed. Inspection prints records; collection stores them as described below. No candle API/frontend data connection exists yet.
+
+Stage 2.2 adds a separate local analytics database at `backend/data/market.sqlite` using native SQLite (Node >=22.13). Finalized pool notices/signature scans feed durable jobs; the existing decoder's receipt/trades/status commit atomically. Recovery persists pagination and must find a real signature anchor, otherwise it reports a coverage gap. First collection intentionally covers the latest 100 signatures, not lifetime history. `storage/market-store.ts` owns transactions/uniqueness/leases; `market/` coordinates paced reads, retries and reconnect recovery. Legacy `qrate.sqlite` is not migrated. This does not choose the production user database or implement the chart/candle API.
+
+Stage 2.3 adds a pinned DAMM v2 verifier/decoder and migration verifier under `src/meteora/`. A finalized DBC migration plus direct DAMM initializer and a verified destination snapshot establish the link; matching mints alone do not. SQLite schema 2 adds the link and destination recovery anchor atomically with the source receipt outcome. Live collection follows both pool partitions using shared RPC pacing; one-shot recovery follows the destination in a bounded second pass. Linked DAMM history starts at the migration signature, while standalone bootstrap remains latest 100. Older missing DBC migration evidence requires an explicit signature, not a guessed destination. Schema 1 upgrades additively on a writable collection run; unrelated historical databases remain untouched.
+
+The remaining requirements below are intended architecture where not covered by these slices. Legacy raw transport remains in-memory. Restricted exact-input/token-A-WSOL coverage does not provide all Meteora modes or independently prove provider completeness. See `backend/docs/{market-data-dbc,market-storage-recovery,market-data-damm}.md` for supported cases and evidence. Candles and frontend data delivery remain absent.
 
 - Subscribe to relevant Meteora pools via Helius WebSockets.
 - Verify signatures/transaction status; skip failures; use bounded workers, backpressure, retries with jitter, persistent checkpoints and deduplication.

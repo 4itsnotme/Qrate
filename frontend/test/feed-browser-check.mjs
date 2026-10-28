@@ -25,7 +25,9 @@ const server = createServer(async (request, response) => {
     response.end(fixture.subarray(start, end + 1));
     return;
   }
-  const assets = { '/': ['index.html', 'text/html'], '/feed.js': ['feed.js', 'text/javascript'], '/feed-data.js': ['feed-data.js', 'text/javascript'] };
+  const assets = { '/': ['index.html', 'text/html'], '/feed.js': ['feed.js', 'text/javascript'], '/feed-data.js': ['feed-data.js', 'text/javascript'],
+    '/trading-chart.js': ['trading-chart.js', 'text/javascript'],
+    '/vendor/lightweight-charts/lightweight-charts.standalone.production.js': ['vendor/lightweight-charts/lightweight-charts.standalone.production.js', 'text/javascript'] };
   if (!assets[url.pathname]) { response.writeHead(404); response.end(); return; }
   const [path, type] = assets[url.pathname];
   response.writeHead(200, { 'Content-Type': type });
@@ -192,8 +194,15 @@ try {
   await click('[aria-current] .trade-button');
   await until('qrateFeed.getState().tradingOpen');
   assert.equal(await evaluate('location.hash'), '#trade/clip-0');
+  await until('document.querySelector("#trading-chart").dataset.state === "empty"');
+  assert.equal(await evaluate('document.querySelector("#trading-chart").dataset.videoId'), 'clip-0');
+  assert.ok(await evaluate('document.querySelectorAll("#trading-chart canvas").length') > 0);
+  assert.ok(await evaluate('document.querySelector("#trading-chart").clientWidth') > 100);
+  assert.ok(await evaluate('document.querySelector("#trading-chart").clientHeight') > 100);
+  assert.equal(await evaluate('document.querySelector(".trading-chart-message").textContent'), 'No price data yet.');
   assert.equal(await evaluate('[...document.querySelectorAll("video")].every(v=>v.paused)'), true);
   await click('.back-to-feed'); await until('!qrateFeed.getState().tradingOpen');
+  assert.equal(await evaluate('document.querySelectorAll("#trading-chart canvas").length'), 0);
   assert.equal(await evaluate('document.querySelector(".video-feed").scrollTop'), saved);
   await until('!document.querySelector("[aria-current] video").paused');
   await click('[aria-current] video');
@@ -254,6 +263,9 @@ try {
   await swipe(100, 300, 280, 305);
   await until('qrateFeed.getState().tradingOpen');
   assert.equal(await evaluate('location.hash'), '#trade/clip-1');
+  await until('document.querySelector("#trading-chart").dataset.state === "empty"');
+  assert.equal(await evaluate('document.querySelector("#trading-chart").dataset.videoId'), 'clip-1');
+  await writeFile(new URL('../../trading-chart-mobile-check.png', import.meta.url), Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
   await swipe(300, 300, 100, 302);
   await until('!qrateFeed.getState().tradingOpen');
   assert.equal(await evaluate('qrateFeed.getState().activeIndex'), 4);
@@ -285,13 +297,22 @@ try {
   const fileOrigin = new URL('index.html', appRoot).href;
   await navigate(fileOrigin + '#trade/video-2');
   await until('qrateFeed.getState().tradingOpen');
+  await until('document.querySelector("#trading-chart").dataset.state === "empty"');
+  assert.equal(await evaluate('LightweightCharts.version()'), '5.2.1');
   await click('.back-to-feed'); await until('!qrateFeed.getState().tradingOpen');
   assert.equal(await evaluate('qrateFeed.getState().activeIndex'), 1);
+  await evaluate('window.qaChartLibrary=window.LightweightCharts;window.LightweightCharts=undefined');
+  await click('[aria-current] .trade-button');
+  await until('document.querySelector("#trading-chart").dataset.state === "error"');
+  assert.equal(await evaluate('document.querySelector(".trading-chart-message").textContent'), 'Chart unavailable. Reload to retry.');
+  await click('.back-to-feed'); await until('!qrateFeed.getState().tradingOpen');
+  await evaluate('window.LightweightCharts=window.qaChartLibrary');
   await evaluate('qrateFeed.destroy()');
   assert.equal(await evaluate('document.querySelectorAll("video").length'), 0);
   assert.equal(await feedListenerCount(), 0);
   assert.deepEqual(exceptions, []);
   console.log('PASS: multiple local previews, file:// operation, direct trading links and no JavaScript exceptions.');
+  console.log('PASS: real empty Lightweight Charts canvas, per-video identity, resize, chart teardown and missing-library recovery.');
 } finally {
   await cdp('Page.navigate', { url: 'about:blank' }).catch(() => {});
   socket.close();

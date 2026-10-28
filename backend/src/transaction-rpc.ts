@@ -3,23 +3,24 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// Return unknown JSON until protocol decoders are implemented; do not pretend these are trades.
+// Transport returns JSON receipts; protocol interpretation belongs to separate decoders.
 export async function getTransaction(
   rpcUrl: URL,
   signature: string,
   signal: AbortSignal,
+  options: { commitment?: 'confirmed' | 'finalized'; fetcher?: typeof fetch } = {},
 ): Promise<Record<string, unknown>> {
   // Retry null results and transient failures: the HTTP node can lag behind notifications.
   for (let attempt = 0; attempt < 4; attempt += 1) {
     signal.throwIfAborted();
     try {
-      const response = await fetch(rpcUrl, {
+      const response = await (options.fetcher ?? fetch)(rpcUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jsonrpc: "2.0", id: 1, method: "getTransaction",
           params: [signature, {
-            commitment: "confirmed", encoding: "jsonParsed", maxSupportedTransactionVersion: 1,
+            commitment: options.commitment ?? "confirmed", encoding: "jsonParsed", maxSupportedTransactionVersion: 1,
           }],
         }),
         signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
